@@ -66,7 +66,17 @@ actor {
     };
 
     public query ({ caller }) func getUserResults() : async Result.Result<{ id : Nat; results : [Text] }, Text> {
-        return #ok({ id = 123; results = ["fake result"] });
+        let userId = switch(Map.get(userIdMap, phash, caller)) {
+            case(?found) found;
+            case(_) return #err("User not found");
+        };
+
+        let results = switch(Map.get(userResultsMap, nhash, userId)) {
+            case(?found) Vector.toArray(found);
+            case(_) [];
+        };
+
+        return #ok({ id = userId; results = results })
     };
 
     public func outcall_ai_model_for_sentiment_analysis(paragraph : Text) : async Result.Result<{ paragraph : Text; result : Text }, Text> {
