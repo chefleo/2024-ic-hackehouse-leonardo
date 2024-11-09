@@ -5,14 +5,45 @@ import Array "mo:base/Array";
 import Blob "mo:base/Blob";
 import Text "mo:base/Text";
 import Cycles "mo:base/ExperimentalCycles";
-
+import Debug "mo:base/Debug";
+import Nat "mo:base/Nat";
+import Principal "mo:base/Principal";
+import Map "mo:map/Map";
+import { phash; nhash } "mo:map/Map";
+ 
 actor {
+    stable var autoIndex = 0;
+    let userIdMap = Map.new<Principal, Nat>();
+    let userProfileMap = Map.new<Nat, Text>();
+
     public query ({ caller }) func getUserProfile() : async Result.Result<{ id : Nat; name : Text }, Text> {
-        return #ok({ id = 123; name = "test" });
+       switch (Map.get(userIdMap, phash, caller)) {
+        case (null) { #err("User not found") };
+        case (?userId) {
+            switch (Map.get(userProfileMap, nhash, userId)) {
+                case (null) { #err("User profile not set") };
+                case (?name) { #ok({ id = userId; name = name }) };
+            };
+        };
+    };
     };
 
     public shared ({ caller }) func setUserProfile(name : Text) : async Result.Result<{ id : Nat; name : Text }, Text> {
-        return #ok({ id = 123; name = "test" });
+        switch(Map.get(userIdMap, phash, caller)) {
+            case(?_x) {};
+            case(_) {
+                Map.set(userIdMap, phash, caller, autoIndex);
+                autoIndex += 1;
+            };
+        };
+
+        let foundId = switch(Map.get(userIdMap, phash, caller)) {
+            case(?found) found;
+            case(_) {return #err("User not found")};
+        };
+
+    Map.set(userProfileMap, nhash, foundId, name);
+    return #ok({ id = foundId; name = name});
     };
 
     public shared ({ caller }) func addUserResult(result : Text) : async Result.Result<{ id : Nat; results : [Text] }, Text> {
