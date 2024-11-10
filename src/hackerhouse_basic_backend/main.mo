@@ -11,6 +11,7 @@ import Principal "mo:base/Principal";
 import Map "mo:map/Map";
 import Vector "mo:vector";
 import { phash; nhash } "mo:map/Map";
+import {JSON} "mo:serde";
  
 actor {
     stable var autoIndex = 0;
@@ -97,11 +98,31 @@ actor {
 
         // TODO
         // Install "serde" package and parse JSON
+        let blob = switch(JSON.fromText(text_response, null)) {
+            case (#ok(b)) {b};
+            case(_) { return #err("Error decoding JSON: " # text_response)};
+        };
+
+        let results : ?[[{label_: Text; score: Float}]] = from_candid (blob);
+        let parsed_results = switch(results) {
+            case(null) { return #err("Error parsing JSON: " # text_response)};
+            case(?x) { x[0] }
+        };
+
         // calculate highest sentiment and return it as a result
+        var highest_score : Float = 0;
+        var highest_sentiment : Text = "";
+        
+        for (result in parsed_results.vals()) {
+            if (result.score > highest_score) {
+                highest_score := result.score;
+                highest_sentiment := result.label_;
+            }
+        };
 
         return #ok({
             paragraph = paragraph;
-            result = text_response;
+            result = highest_sentiment;
         });
     };
 
@@ -166,7 +187,7 @@ actor {
         let http_request : Types.HttpRequestArgs = {
             url = url;
             max_response_bytes = null; //optional for request
-            headers = request_headers;
+            headers = merged_headers;
             // note: type of `body` is ?[Nat8] so it is passed here as "?request_body_as_nat8" instead of "request_body_as_nat8"
             body = ?request_body_as_nat8;
             method = #post;
